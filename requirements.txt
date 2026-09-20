@@ -1,0 +1,15 @@
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pillow>=10.0,<12.0
+pytesseract>=0.3.13,<1.0
+pytest>=8.0,<9.0
+winrt-Windows.Foundation>=3.2.1,<4.0
+winrt-Windows.Foundation.Collections>=3.2.1,<4.0
+winrt-Windows.Graphics>=3.2.1,<4.0
+winrt-Windows.Graphics.Capture>=3.2.1,<4.0
+winrt-Windows.Graphics.Capture.Interop>=3.2.1,<4.0
+winrt-Windows.Graphics.DirectX>=3.2.1,<4.0
+winrt-Windows.Graphics.DirectX.Direct3D11>=3.2.1,<4.0
+winrt-Windows.Graphics.DirectX.Direct3D11.Interop>=3.2.1,<4.0
+winrt-Windows.Graphics.Imaging>=3.2.1,<4.0
+winrt-Windows.Storage.Streams>=3.2.1,<4.0
