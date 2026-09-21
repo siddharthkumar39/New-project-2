@@ -7,6 +7,7 @@ makes it easy to replace OCR with a verified Qualcomm-compatible model later.
 from __future__ import annotations
 
 import logging
+import shutil
 from typing import Any
 
 from PIL import Image
@@ -18,8 +19,17 @@ from backend.windows_graphics_capture import (
 
 logger = logging.getLogger(__name__)
 
-# Windows Tesseract installation
-TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# Default Windows Tesseract installation path
+DEFAULT_TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+TESSERACT_PATH = DEFAULT_TESSERACT_PATH
+
+
+def resolve_tesseract_cmd() -> str:
+    """Resolve the Tesseract binary path: check system PATH first, then fallback to default."""
+    which_path = shutil.which("tesseract")
+    if which_path:
+        return which_path
+    return DEFAULT_TESSERACT_PATH
 
 
 def capture_screen() -> Image.Image:
@@ -49,8 +59,8 @@ def extract_text(image: Any) -> tuple[str, str | None]:
             "Install the project dependencies to enable text reading."
         )
 
-    # Explicitly tell pytesseract where Tesseract is installed on Windows.
-    pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+    tesseract_cmd = resolve_tesseract_cmd()
+    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
 
     try:
         text = pytesseract.image_to_string(image).strip()
@@ -58,7 +68,7 @@ def extract_text(image: Any) -> tuple[str, str | None]:
     except pytesseract.TesseractNotFoundError:
         return "", (
             "Tesseract OCR could not be found at: "
-            f"{TESSERACT_PATH}"
+            f"{tesseract_cmd}"
         )
 
     except Exception:

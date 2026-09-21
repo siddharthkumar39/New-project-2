@@ -30,7 +30,7 @@ Screen understanding demonstrates the main product idea with the smallest number
    python -m pip install -r requirements.txt
    ```
 
-3. Install **Tesseract OCR for Windows**, then ensure its installation folder is in your `PATH`. Tesseract is a local text-reading tool; without it, screen capture still works but no text will be read.
+3. Install **Tesseract OCR for Windows**. SnapSight dynamically detects `tesseract` from your system `PATH` first; if it is not found in `PATH`, it automatically falls back to the default Windows installation path (`C:\Program Files\Tesseract-OCR\tesseract.exe`). Tesseract is a local text-reading tool; without it, screen capture still works but no text will be read.
 
 4. Start the app:
 
