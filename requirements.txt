@@ -13,3 +13,7 @@ winrt-Windows.Graphics.DirectX.Direct3D11>=3.2.1,<4.0
 winrt-Windows.Graphics.DirectX.Direct3D11.Interop>=3.2.1,<4.0
 winrt-Windows.Graphics.Imaging>=3.2.1,<4.0
 winrt-Windows.Storage.Streams>=3.2.1,<4.0
+sounddevice>=0.5.0,<1.0
+numpy>=2.0,<3.0
+faster-whisper>=1.0.0,<2.0
+

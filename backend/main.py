@@ -9,8 +9,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import STATIC_DIR
-from backend.schemas import ScreenResult
+from backend.schemas import ScreenResult, VoiceResult
+import ctranslate2  # Pre-load modern C++ runtime before winrt loads bundled MSVCP140.dll
 from backend.screen import understand_screen
+from backend.speech import understand_voice
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -37,3 +39,20 @@ def analyze_screen() -> dict[str, str | None]:
     except RuntimeError as error:
         logger.warning("Screen module request failed: %s", error)
         raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@app.post("/api/voice", response_model=VoiceResult)
+def analyze_voice() -> dict[str, str | None]:
+    """Capture a short microphone clip and transcribe it locally."""
+    try:
+        return understand_voice()
+    except Exception as error:
+        logger.exception("Voice module request failed unexpectedly: %s", error)
+        return {
+            "status": "error",
+            "transcript": "",
+            "audio_context": "An unexpected error occurred during voice processing.",
+            "response": "Voice processing encountered an internal error.",
+            "note": str(error),
+        }
+

@@ -10,3 +10,14 @@ class ScreenResult(BaseModel):
     response: str = Field(description="A helpful answer that never assumes unseen content")
     note: str | None = Field(default=None, description="Setup or limitation information")
 
+
+class VoiceResult(BaseModel):
+    """The structured response sent from the voice module to the UI."""
+
+    status: str = Field(description="success, partial, or error")
+    transcript: str = Field(description="Text transcribed from the audio, when available")
+    audio_context: str = Field(description="A conservative description based on recorded input")
+    response: str = Field(description="A helpful answer that never assumes unseen content")
+    note: str | None = Field(default=None, description="Setup or limitation information")
+
+
