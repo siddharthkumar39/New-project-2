@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import STATIC_DIR
-from backend.schemas import ScreenResult, VoiceResult
+from backend.schemas import CameraResult, ScreenResult, VoiceResult
 import ctranslate2  # Pre-load modern C++ runtime before winrt loads bundled MSVCP140.dll
+from backend.camera import understand_camera
 from backend.screen import understand_screen
 from backend.speech import understand_voice
 
@@ -54,5 +56,21 @@ def analyze_voice() -> dict[str, str | None]:
             "audio_context": "An unexpected error occurred during voice processing.",
             "response": "Voice processing encountered an internal error.",
             "note": str(error),
+        }
+
+
+@app.post("/api/camera", response_model=CameraResult)
+def analyze_camera() -> dict[str, Any]:
+    """Capture a single frame from the camera and report frame metadata."""
+    try:
+        return understand_camera()
+    except Exception as error:
+        logger.exception("Camera module request failed unexpectedly: %s", error)
+        return {
+            "status": "error",
+            "visual_context": "An unexpected error occurred during camera processing.",
+            "response": "Camera processing encountered an internal error.",
+            "note": str(error),
+            "frame_info": None,
         }
 

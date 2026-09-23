@@ -129,3 +129,76 @@ def test_api_voice_unexpected_exception_handled_gracefully(client, monkeypatch):
     assert data["transcript"] == ""
     assert "Unexpected audio driver crash" in data["note"]
     assert "encountered an internal error" in data["response"]
+
+
+def test_api_camera_success(client, monkeypatch):
+    from backend import main
+
+    monkeypatch.setattr(
+        main,
+        "understand_camera",
+        lambda: {
+            "status": "success",
+            "visual_context": "Captured 1 camera frame (640x480, 3 channels) locally in memory.",
+            "response": "Successfully captured a 640x480 camera frame locally.",
+            "note": None,
+            "frame_info": {
+                "width": 640,
+                "height": 480,
+                "channels": 3,
+                "format": "BGR",
+            },
+        },
+    )
+
+    response = client.post("/api/camera")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert "640x480" in data["visual_context"]
+    assert data["frame_info"]["width"] == 640
+    assert data["frame_info"]["height"] == 480
+    assert data["frame_info"]["channels"] == 3
+    assert data["note"] is None
+
+
+def test_api_camera_error(client, monkeypatch):
+    from backend import main
+
+    monkeypatch.setattr(
+        main,
+        "understand_camera",
+        lambda: {
+            "status": "error",
+            "visual_context": "Camera capture failed before image processing could run.",
+            "response": "Could not access or capture from the camera.",
+            "note": "Camera device (index 0) could not be opened.",
+            "frame_info": None,
+        },
+    )
+
+    response = client.post("/api/camera")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "error"
+    assert "Could not access or capture" in data["response"]
+    assert "could not be opened" in data["note"]
+    assert data["frame_info"] is None
+
+
+def test_api_camera_unexpected_exception_handled_gracefully(client, monkeypatch):
+    from backend import main
+
+    def mock_crash():
+        raise RuntimeError("DirectShow driver failure")
+
+    monkeypatch.setattr(main, "understand_camera", mock_crash)
+
+    response = client.post("/api/camera")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["frame_info"] is None
+    assert "DirectShow driver failure" in data["note"]
+    assert "encountered an internal error" in data["response"]
+
