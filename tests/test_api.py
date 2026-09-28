@@ -139,14 +139,16 @@ def test_api_camera_success(client, monkeypatch):
         "understand_camera",
         lambda: {
             "status": "success",
-            "visual_context": "Captured 1 camera frame (640x480, 3 channels) locally in memory.",
-            "response": "Successfully captured a 640x480 camera frame locally.",
+            "visual_context": "Captured 1 camera frame (640x480). Detected 1 object: bottle.",
+            "response": "I observed a well-lit camera view and detected: bottle (89%).",
             "note": None,
+            "objects": [{"label": "bottle", "confidence": 0.89}],
             "frame_info": {
                 "width": 640,
                 "height": 480,
                 "channels": 3,
                 "format": "BGR",
+                "objects": [{"label": "bottle", "confidence": 0.89}],
             },
         },
     )
@@ -155,11 +157,12 @@ def test_api_camera_success(client, monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
-    assert "640x480" in data["visual_context"]
+    assert data["objects"] == [{"label": "bottle", "confidence": 0.89}]
     assert data["frame_info"]["width"] == 640
     assert data["frame_info"]["height"] == 480
     assert data["frame_info"]["channels"] == 3
     assert data["note"] is None
+
 
 
 def test_api_camera_error(client, monkeypatch):

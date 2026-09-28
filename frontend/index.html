@@ -25,12 +25,16 @@
           <div><h2>Understand Voice</h2><p>Record a 5-second audio question and transcribe it locally.</p></div>
           <button id="voiceButton">Record Voice <span>→</span></button>
         </div>
-        <div class="future-card" style="grid-column: span 2;"><span>Camera</span><small>Coming after voice module works</small></div>
+        <div class="mode-card active">
+          <span class="icon">📷</span>
+          <div><h2>Understand Camera</h2><p>Capture one camera frame locally in memory.</p></div>
+          <button id="cameraButton">Capture Camera <span>→</span></button>
+        </div>
       </section>
 
       <section class="response-card" aria-live="polite">
         <div class="response-heading"><p>AI RESPONSE</p><span id="status">Ready</span></div>
-        <p id="response">Click “Analyze screen” or “Record Voice” to start.</p>
+        <p id="response">Click “Analyze screen”, “Record Voice”, or “Capture Camera” to start.</p>
         <details id="details" hidden><summary>What SnapSight observed</summary><p id="context"></p><pre id="screenText"></pre><p id="note"></p></details>
       </section>
 

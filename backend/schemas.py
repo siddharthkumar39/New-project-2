@@ -31,6 +31,10 @@ class CameraResult(BaseModel):
     visual_context: str = Field(description="A conservative description based on captured frame")
     response: str = Field(description="A helpful answer that never assumes unseen content")
     note: str | None = Field(default=None, description="Setup or limitation information")
+    objects: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Detected visual objects with labels and confidence scores",
+    )
     frame_info: dict[str, Any] | None = Field(
         default=None, description="Metadata describing the captured frame (dimensions, channels, format)"
     )

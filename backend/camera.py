@@ -102,10 +102,7 @@ def capture_camera_frame(
 def understand_camera(
     device_index: int = DEFAULT_CAMERA_INDEX,
 ) -> dict[str, Any]:
-    """Capture a single camera frame locally and return structured metadata.
-
-    Conservative MVP implementation: captures one frame into memory and
-    returns truthful metadata without running visual AI models yet.
+    """Capture a single camera frame locally and perform local visual understanding.
 
     Returns:
         Structured dictionary matching CameraResult schema.
@@ -119,6 +116,7 @@ def understand_camera(
             "visual_context": "Camera capture failed before image processing could run.",
             "response": "Could not access or capture from the camera.",
             "note": str(error),
+            "objects": [],
             "frame_info": None,
         }
     except Exception as error:
@@ -128,28 +126,35 @@ def understand_camera(
             "visual_context": "An unexpected error occurred during camera processing.",
             "response": "Camera processing encountered an internal error.",
             "note": str(error),
+            "objects": [],
             "frame_info": None,
         }
 
-    frame_info = {
-        "width": captured.width,
-        "height": captured.height,
-        "channels": captured.channels,
-        "format": captured.format,
-    }
-    visual_context = (
-        f"Captured 1 camera frame ({captured.width}x{captured.height}, "
-        f"{captured.channels} channels) locally in memory."
-    )
-    response = (
-        f"Successfully captured a {captured.width}x{captured.height} camera frame locally. "
-        "The frame is stored in memory and ready for visual understanding."
-    )
+    try:
+        from backend.vision import analyze_visual_frame
 
-    return {
-        "status": "success",
-        "visual_context": visual_context,
-        "response": response,
-        "note": None,
-        "frame_info": frame_info,
-    }
+        return analyze_visual_frame(captured.frame)
+    except Exception as error:
+        logger.exception("Vision understanding failed: %s", error)
+        return {
+            "status": "partial",
+            "visual_context": (
+                f"Captured 1 camera frame ({captured.width}x{captured.height}, "
+                f"{captured.channels} channels) locally in memory."
+            ),
+            "response": (
+                f"Captured a {captured.width}x{captured.height} camera frame, "
+                "but visual understanding encountered an error."
+            ),
+            "note": str(error),
+            "objects": [],
+            "frame_info": {
+                "width": captured.width,
+                "height": captured.height,
+                "channels": captured.channels,
+                "format": captured.format,
+                "objects": [],
+            },
+        }
+
+

@@ -102,20 +102,55 @@ class TestUnderstandCamera:
             format="BGR",
         )
         monkeypatch.setattr("backend.camera.capture_camera_frame", lambda **kwargs: captured)
+        monkeypatch.setattr(
+            "backend.vision.analyze_visual_frame",
+            lambda frame: {
+                "status": "success",
+                "visual_context": "Captured 1 camera frame (1280x720, 3 channels) locally in memory.",
+                "response": "I observed a well-lit camera view.",
+                "note": None,
+                "objects": [{"label": "bottle", "confidence": 0.89}],
+                "frame_info": {
+                    "width": 1280,
+                    "height": 720,
+                    "channels": 3,
+                    "format": "BGR",
+                    "objects": [{"label": "bottle", "confidence": 0.89}],
+                },
+            },
+        )
 
         result = understand_camera()
 
         assert result["status"] == "success"
         assert "1280x720" in result["visual_context"]
-        assert "3 channels" in result["visual_context"]
-        assert "1280x720" in result["response"]
+        assert result["response"] == "I observed a well-lit camera view."
+        assert result["objects"] == [{"label": "bottle", "confidence": 0.89}]
         assert result["note"] is None
-        assert result["frame_info"] == {
-            "width": 1280,
-            "height": 720,
-            "channels": 3,
-            "format": "BGR",
-        }
+        assert result["frame_info"]["width"] == 1280
+
+
+    def test_understand_camera_vision_failure_fallback(self, monkeypatch):
+        fake_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        captured = CapturedFrame(
+            frame=fake_frame,
+            width=640,
+            height=480,
+            channels=3,
+            format="BGR",
+        )
+        monkeypatch.setattr("backend.camera.capture_camera_frame", lambda **kwargs: captured)
+
+        def mock_vision_fail(frame):
+            raise RuntimeError("Vision inference model failure")
+
+        monkeypatch.setattr("backend.vision.analyze_visual_frame", mock_vision_fail)
+
+        result = understand_camera()
+
+        assert result["status"] == "partial"
+        assert "Vision inference model failure" in result["note"]
+        assert result["frame_info"]["width"] == 640
 
     def test_understand_camera_unavailable_error(self, monkeypatch):
         def mock_capture(**kwargs):
