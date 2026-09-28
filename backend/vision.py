@@ -71,10 +71,43 @@ def resolve_tesseract_cmd() -> str:
     return DEFAULT_TESSERACT_PATH
 
 
+PROVIDER_PRIORITY: tuple[str, ...] = (
+    "QNNExecutionProvider",
+    "DmlExecutionProvider",
+    "CPUExecutionProvider",
+)
+
+
+def get_supported_execution_providers(
+    available_providers: list[str] | None = None,
+) -> list[str]:
+    """Determine prioritized execution providers based on system availability.
+
+    Priority order:
+    1. QNNExecutionProvider (Qualcomm Hexagon NPU on Snapdragon Copilot+ PCs)
+    2. DmlExecutionProvider (DirectML for Snapdragon Adreno GPU/NPU)
+    3. CPUExecutionProvider (Universal baseline fallback)
+
+    Always guarantees CPUExecutionProvider is present at the end of the list.
+    """
+    if available_providers is None:
+        try:
+            available_providers = ort.get_available_providers()
+        except Exception:
+            available_providers = []
+
+    selected: list[str] = [p for p in PROVIDER_PRIORITY if p in available_providers]
+    if "CPUExecutionProvider" not in selected:
+        selected.append("CPUExecutionProvider")
+    return selected
+
+
 def get_vision_session(model_path: str | Path | None = None) -> ort.InferenceSession:
     """Get or load a cached ONNX Runtime session for object detection.
 
-    Thread-safe and lazy-loaded to prevent startup delays.
+    Thread-safe and lazy-loaded to prevent startup delays. Dynamically negotiates
+    execution providers preferring hardware accelerators (QNN -> DML) with safe
+    fallback to CPUExecutionProvider.
     """
     global _cached_session, _cached_session_path
 
@@ -94,11 +127,31 @@ def get_vision_session(model_path: str | Path | None = None) -> ort.InferenceSes
             opts = ort.SessionOptions()
             opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
             opts.intra_op_num_threads = 2
-            session = ort.InferenceSession(
-                str(target_path),
-                sess_options=opts,
-                providers=["CPUExecutionProvider"],
-            )
+
+            configured_providers = get_supported_execution_providers()
+            logger.info("Configured ONNX execution providers: %s", configured_providers)
+
+            try:
+                session = ort.InferenceSession(
+                    str(target_path),
+                    sess_options=opts,
+                    providers=configured_providers,
+                )
+            except Exception as ep_error:
+                if configured_providers != ["CPUExecutionProvider"]:
+                    logger.warning(
+                        "Failed initializing session with providers %s (%s). Falling back to CPUExecutionProvider.",
+                        configured_providers,
+                        ep_error,
+                    )
+                    session = ort.InferenceSession(
+                        str(target_path),
+                        sess_options=opts,
+                        providers=["CPUExecutionProvider"],
+                    )
+                else:
+                    raise
+
             _cached_session = session
             _cached_session_path = str(target_path)
             return session
@@ -222,33 +275,40 @@ def detect_objects(
         raise VisionInferenceError(f"Inference execution failed: {error}") from error
 
     # Output shape is [1, 84, 8400] for standard YOLOv8
-    predictions = outputs[0].T  # shape (8400, 84)
+    preds = outputs[0] if outputs.ndim == 3 else outputs  # shape (84, 8400)
+    boxes_data = preds[:4, :]
+    class_scores = preds[4:, :]
 
-    boxes: list[list[int]] = []
-    confidences: list[float] = []
-    class_ids: list[int] = []
+    best_class_ids = np.argmax(class_scores, axis=0)
+    best_confidences = np.max(class_scores, axis=0)
 
-    for row in predictions:
-        class_scores = row[4:]
-        class_id = int(np.argmax(class_scores))
-        conf = float(class_scores[class_id])
-
-        if conf >= conf_threshold and class_id < len(COCO_CLASSES):
-            cx, cy, bw, bh = row[0:4]
-            # Convert letterbox coordinates back to original frame coordinates
-            orig_cx = (cx - dx) / scale
-            orig_cy = (cy - dy) / scale
-            orig_w = bw / scale
-            orig_h = bh / scale
-            x = int(round(orig_cx - orig_w / 2))
-            y = int(round(orig_cy - orig_h / 2))
-
-            boxes.append([x, y, int(round(orig_w)), int(round(orig_h))])
-            confidences.append(conf)
-            class_ids.append(class_id)
-
-    if not boxes:
+    valid_mask = (best_confidences >= conf_threshold) & (best_class_ids < len(COCO_CLASSES))
+    if not np.any(valid_mask):
         return []
+
+    filtered_indices = np.where(valid_mask)[0]
+    filtered_scores = best_confidences[filtered_indices]
+    filtered_classes = best_class_ids[filtered_indices]
+    filtered_boxes = boxes_data[:, filtered_indices]
+
+    cx = filtered_boxes[0, :]
+    cy = filtered_boxes[1, :]
+    bw = filtered_boxes[2, :]
+    bh = filtered_boxes[3, :]
+
+    orig_cx = (cx - dx) / scale
+    orig_cy = (cy - dy) / scale
+    orig_w = bw / scale
+    orig_h = bh / scale
+
+    x = np.round(orig_cx - orig_w / 2.0).astype(int)
+    y = np.round(orig_cy - orig_h / 2.0).astype(int)
+    w = np.round(orig_w).astype(int)
+    h = np.round(orig_h).astype(int)
+
+    boxes = np.stack([x, y, w, h], axis=1).tolist()
+    confidences = [float(s) for s in filtered_scores]
+    class_ids = [int(c) for c in filtered_classes]
 
     # Non-Maximum Suppression to remove redundant overlapping boxes
     indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)

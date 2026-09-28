@@ -9,6 +9,7 @@ import pytesseract
 
 from backend.vision import (
     COCO_CLASSES,
+    PROVIDER_PRIORITY,
     InvalidFrameError,
     VisionInferenceError,
     VisionModelLoadError,
@@ -18,6 +19,7 @@ from backend.vision import (
     analyze_visual_frame,
     detect_objects,
     extract_camera_text,
+    get_supported_execution_providers,
     get_vision_session,
     preprocess_frame,
 )
@@ -84,6 +86,73 @@ class TestModelSessionManagement:
         with pytest.raises(VisionModelLoadError) as exc_info:
             get_vision_session(model_path=corrupt_file)
         assert "Failed to load vision model" in str(exc_info.value)
+
+    def test_get_supported_execution_providers_priority(self):
+        # When only standard CPU and Azure are present
+        assert get_supported_execution_providers(["AzureExecutionProvider", "CPUExecutionProvider"]) == [
+            "CPUExecutionProvider"
+        ]
+
+        # When QNN is present
+        assert get_supported_execution_providers(
+            ["QNNExecutionProvider", "AzureExecutionProvider", "CPUExecutionProvider"]
+        ) == ["QNNExecutionProvider", "CPUExecutionProvider"]
+
+        # When DML is present
+        assert get_supported_execution_providers(
+            ["DmlExecutionProvider", "CPUExecutionProvider"]
+        ) == ["DmlExecutionProvider", "CPUExecutionProvider"]
+
+        # When both QNN and DML are present, priority QNN > DML > CPU is preserved
+        assert get_supported_execution_providers(
+            ["DmlExecutionProvider", "QNNExecutionProvider", "CPUExecutionProvider"]
+        ) == ["QNNExecutionProvider", "DmlExecutionProvider", "CPUExecutionProvider"]
+
+        # When list is empty or CPU missing, CPU fallback is always guaranteed
+        assert get_supported_execution_providers([]) == ["CPUExecutionProvider"]
+        assert get_supported_execution_providers(["SomeOtherProvider"]) == ["CPUExecutionProvider"]
+
+    def test_get_supported_execution_providers_current_machine(self):
+        # On this development machine, only CPUExecutionProvider should be active
+        providers = get_supported_execution_providers()
+        assert providers == ["CPUExecutionProvider"]
+
+    def test_accelerator_initialization_failure_falls_back_to_cpu(self, tmp_path, monkeypatch):
+        # Create a dummy model file
+        dummy_model = tmp_path / "model.onnx"
+        dummy_model.write_text("dummy")
+
+        # Mock providers to return QNN and CPU
+        monkeypatch.setattr(
+            "backend.vision.get_supported_execution_providers",
+            lambda: ["QNNExecutionProvider", "CPUExecutionProvider"],
+        )
+
+        mock_cpu_session = MagicMock()
+        calls = []
+
+        def mock_init(model_str, sess_options=None, providers=None):
+            calls.append(providers)
+            if providers == ["QNNExecutionProvider", "CPUExecutionProvider"]:
+                raise RuntimeError("Failed to load QNN HTP backend DLL")
+            return mock_cpu_session
+
+        monkeypatch.setattr("onnxruntime.InferenceSession", mock_init)
+
+        # Clear cached session to force loading
+        import backend.vision as bv
+        bv._cached_session = None
+        bv._cached_session_path = None
+
+        session = get_vision_session(model_path=dummy_model)
+        assert session is mock_cpu_session
+        assert len(calls) == 2
+        assert calls[0] == ["QNNExecutionProvider", "CPUExecutionProvider"]
+        assert calls[1] == ["CPUExecutionProvider"]
+
+        # Cleanup cached session
+        bv._cached_session = None
+        bv._cached_session_path = None
 
 
 class TestObjectDetection:
@@ -154,6 +223,25 @@ class TestObjectDetection:
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         with pytest.raises(VisionInferenceError):
             detect_objects(frame, session=mock_session)
+
+    def test_vectorized_postprocessing_box_conversion(self):
+        mock_session = MagicMock()
+        mock_session.get_inputs.return_value = [MagicMock(name="images")]
+        # Cup is class 41
+        # Place detection at center of 640x640 space: cx=320, cy=320, w=100, h=100
+        mock_output = create_mock_yolo_output([(41, 0.95, [320.0, 320.0, 100.0, 100.0])])
+        mock_session.run.return_value = [mock_output]
+
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        results = detect_objects(frame, conf_threshold=0.35, session=mock_session)
+
+        assert len(results) == 1
+        assert results[0]["label"] == "cup"
+        assert results[0]["confidence"] == 0.95
+        box = results[0]["box"]
+        assert len(box) == 4
+        # Verify box coordinates are standard ints
+        assert all(isinstance(coord, int) for coord in box)
 
 
 class TestCameraTextExtraction:
