@@ -17,6 +17,15 @@ def test_api_health(client):
     assert response.json() == {"status": "ok", "module": "screen"}
 
 
+def test_api_dashboard_serves_countdown_and_cancel_controls(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'id="screenDelay"' in html
+    assert 'id="cancelScreenButton"' in html
+    assert 'id="screenButton"' in html
+
+
 def test_api_screen_still_works(client, monkeypatch):
     from backend import main
 

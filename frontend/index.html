@@ -18,7 +18,21 @@
         <div class="mode-card active">
           <span class="icon">◉</span>
           <div><h2>Understand Screen</h2><p>Capture one screen image and read it locally.</p></div>
-          <button id="screenButton">Analyze screen <span>→</span></button>
+          <div class="card-actions">
+            <div class="delay-control">
+              <label for="screenDelay" class="delay-label">Delay:</label>
+              <select id="screenDelay" class="delay-select" title="Delay before screen capture">
+                <option value="3" selected>3s</option>
+                <option value="5">5s</option>
+                <option value="1">1s</option>
+                <option value="0">0s (Instant)</option>
+              </select>
+            </div>
+            <div class="button-group">
+              <button id="screenButton">Analyze screen <span>→</span></button>
+              <button id="cancelScreenButton" class="cancel-button" hidden type="button">Cancel</button>
+            </div>
+          </div>
         </div>
         <div class="mode-card active">
           <span class="icon">🎙</span>
